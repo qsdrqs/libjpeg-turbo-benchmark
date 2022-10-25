@@ -1,0 +1,5 @@
+build_*/
+benchmark/test_bytes.h
+benchmark/rlbox
+benchmark/rlbox_wasm2c_sandbox
+benchmark/wasm2c_sandbox_compiler
