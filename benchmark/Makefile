@@ -10,13 +10,14 @@ PARALLEL_COUNT=$(shell nproc)
 CC=clang
 CXX=clang++ -std=c++17
 WASI_CC=/opt/wasi-sdk/bin/clang --sysroot /opt/wasi-sdk/share/wasi-sysroot/
-WASI_CXX=/opt/wasi-sdk/bin/clang++ --sysroot /opt/wasi-sdk/share/wasi-sysroot/
+WASI_CXX=/opt/wasi-sdk/bin/clang++ --sysroot /opt/wasi-sdk/share/wasi-sysroot/ -std=c++17
 WASI_AR=/opt/wasi-sdk/bin/ar
 WASI_LD=/opt/wasi-sdk/bin/wasm-ld
 WASI_CFLAGS=-I $(MKFILE_DIR)/wasmcompat
 WASI_LDFLAGS=-Wl,--export-all -Wl,--no-entry -Wl,--growable-table -Wl,--stack-first -Wl,-z,stack-size=1048576
 WASM2C_SRC_PATH=$(MKFILE_DIR)/wasm2c_sandbox_compiler
 WASM2C_RUNTIME=$(addprefix $(WASM2C_SRC_PATH)/wasm2c/, wasm-rt-impl.c wasm-rt-os-unix.c wasm-rt-wasi.c)
+WASM2C_RUNNER=$(addprefix $(WASM2C_SRC_PATH)/wasm2c/, wasm-rt-static-runner.c)
 
 ifdef DEBUG
 BUILD_TYPE_DIR=debug
@@ -31,9 +32,12 @@ BUILD_BINARY_FLAGS=
 endif
 
 LIBJPEG_INCLUDES=-I$(REPO_PATH)/ -I$(REPO_PATH)/build_$(BUILD_TYPE_DIR)
-RLBOX_INCLUDES=-I $(MKFILE_DIR)/rlbox/code/include -I $(MKFILE_DIR)/rlbox_wasm2c_sandbox/include
-WASM2C_BUILD_INCLUDES=-I $(WASM2C_SRC_PATH)/wasm2c -I$(REPO_PATH)/build_wasm$(BUILD_TYPE_DIR)/
 LIBJPEG_LINK=$(REPO_PATH)/build_$(BUILD_TYPE_DIR)/libjpeg.a
+LIBJPEG_WASM_INCLUDES=-I$(REPO_PATH)/ -I$(REPO_PATH)/build_wasm$(BUILD_TYPE_DIR)
+LIBJPEG_WASM_LINK=-Wl,--whole-archive $(REPO_PATH)/build_wasm$(BUILD_TYPE_DIR)/libjpeg.a -Wl,--no-whole-archive
+RLBOX_INCLUDES=-I $(MKFILE_DIR)/rlbox/code/include -I $(MKFILE_DIR)/rlbox_wasm2c_sandbox/include
+RLBOX_LINK=-lrt
+WASM2C_BUILD_INCLUDES=-I $(WASM2C_SRC_PATH)/wasm2c -I$(REPO_PATH)/build_wasm$(BUILD_TYPE_DIR)/
 
 test_bytes.h: test.jpeg test_out.jpeg
 	echo "unsigned char inputData[] = {" > $@
@@ -57,13 +61,10 @@ test_bytes.h: test.jpeg test_out.jpeg
 rlbox:
 	git clone git@github.com:PLSysSec/rlbox.git
 
-../build_$(BUILD_TYPE_DIR)/image_change_quality_noop: image_change_quality_rlbox.cpp rlbox ../build_$(BUILD_TYPE_DIR)
-	$(CXX) $(BUILD_TYPE_FLAGS) $(BUILD_BINARY_FLAGS) -o $@ $< $(LIBJPEG_INCLUDES) $(RLBOX_INCLUDES) $(LIBJPEG_LINK)
+../build_$(BUILD_TYPE_DIR)/image_change_quality_rlbox_noop: image_change_quality_rlbox.cpp rlbox ../build_$(BUILD_TYPE_DIR)
+	$(CXX) $(BUILD_TYPE_FLAGS) $(BUILD_BINARY_FLAGS) -o $@ $< $(LIBJPEG_INCLUDES) $(RLBOX_INCLUDES) $(LIBJPEG_LINK) $(RLBOX_LINK)
 
 #####################################
-
-rlbox_wasm2c_sandbox:
-	git clone --recursive git@github.com:PLSysSec/rlbox_wasm2c_sandbox.git
 
 wasm2c_sandbox_compiler:
 	git clone --recursive git@github.com:PLSysSec/wasm2c_sandbox_compiler.git
@@ -78,24 +79,35 @@ wasm2c_sandbox_compiler/build_$(BUILD_TYPE_DIR): wasm2c_sandbox_compiler
 		AR="$(WASI_AR)" LD="$(WASI_LD)" \
 		cmake -S ../ -B $@ -DCMAKE_BUILD_TYPE=$(BUILD_TYPE_CONFIG) -DENABLE_SHARED=OFF -DWITH_SIMD=OFF
 	cd $@ && make -j$(PARALLEL_COUNT)
-	$(WASI_CC) $(BUILD_TYPE_FLAGS) $(WASI_CFLAGS) $(WASI_LDFLAGS) -o ../build_wasm$(BUILD_TYPE_DIR)/libjpeg.wasm ./rlbox_wasm2c_sandbox/c_src/wasm2c_sandbox_wrapper.c -Wl,--whole-archive ../build_wasm$(BUILD_TYPE_DIR)/libjpeg.a -Wl,--no-whole-archive
+	$(WASI_CC) $(BUILD_TYPE_FLAGS) $(WASI_CFLAGS) $(WASI_LDFLAGS) -o ../build_wasm$(BUILD_TYPE_DIR)/libjpeg.wasm ./rlbox_wasm2c_sandbox/c_src/wasm2c_sandbox_wrapper.c $(LIBJPEG_WASM_LINK)
 	$(WASM2C_SRC_PATH)/build_$(BUILD_TYPE_DIR)/wasm2c ../build_wasm$(BUILD_TYPE_DIR)/libjpeg.wasm -o ../build_wasm$(BUILD_TYPE_DIR)/libjpeg.wasm.c
 
-../build_wasm$(BUILD_TYPE_DIR)/image_change_quality_wasm2c: image_change_quality_rlbox.cpp rlbox rlbox_wasm2c_sandbox ../build_wasm$(BUILD_TYPE_DIR)
+../build_wasm$(BUILD_TYPE_DIR)/image_change_quality_wasm2c: image_change_quality.cpp  ../build_wasm$(BUILD_TYPE_DIR)
+	$(WASI_CXX) $(BUILD_TYPE_FLAGS) $(WASI_CFLAGS) $(WASI_LDFLAGS) -o ../build_wasm$(BUILD_TYPE_DIR)/$@.wasm $< $(LIBJPEG_WASM_INCLUDES) $(LIBJPEG_WASM_LINK)
+	$(WASM2C_SRC_PATH)/build_$(BUILD_TYPE_DIR)/wasm2c ../build_wasm$(BUILD_TYPE_DIR)/$@.wasm -o ../build_wasm$(BUILD_TYPE_DIR)/$@.wasm.c
+	$(CC) $(BUILD_TYPE_FLAGS) $(BUILD_BINARY_FLAGS) -o $@ $(WASM2C_RUNTIME) $(WASM2C_RUNNER) ../build_wasm$(BUILD_TYPE_DIR)/$@.wasm.c $(WASM2C_BUILD_INCLUDES)
+
+#####################################
+
+rlbox_wasm2c_sandbox:
+	git clone --recursive git@github.com:PLSysSec/rlbox_wasm2c_sandbox.git
+
+../build_wasm$(BUILD_TYPE_DIR)/image_change_quality_rlbox_wasm2c: image_change_quality_rlbox.cpp rlbox rlbox_wasm2c_sandbox ../build_wasm$(BUILD_TYPE_DIR)
 	rm -rf ../build_wasm$(BUILD_TYPE_DIR)/objs
 	mkdir -p ../build_wasm$(BUILD_TYPE_DIR)/objs
 	cd ../build_wasm$(BUILD_TYPE_DIR)/objs && \
 		$(CC) $(BUILD_TYPE_FLAGS) $(BUILD_BINARY_FLAGS) $(WASM2C_RUNTIME) $(REPO_PATH)/build_wasm$(BUILD_TYPE_DIR)/libjpeg.wasm.c -c $(WASM2C_BUILD_INCLUDES)
-	$(CXX) $(BUILD_TYPE_FLAGS) $(BUILD_BINARY_FLAGS) ../build_wasm$(BUILD_TYPE_DIR)/objs/*.o -o $@ $< -DRLBOX_WASM2C $(LIBJPEG_INCLUDES) $(WASM2C_BUILD_INCLUDES) $(RLBOX_INCLUDES) ../build_wasm$(BUILD_TYPE_DIR)/libjpeg.a -lrt
+	$(CXX) $(BUILD_TYPE_FLAGS) $(BUILD_BINARY_FLAGS) ../build_wasm$(BUILD_TYPE_DIR)/objs/*.o -o $@ $< -DRLBOX_WASM2C $(LIBJPEG_INCLUDES) $(WASM2C_BUILD_INCLUDES) $(RLBOX_INCLUDES) $(LIBJPEG_LINK) $(RLBOX_LINK)
 
 #####################################
 
-build: test_bytes.h ../build_$(BUILD_TYPE_DIR)/image_change_quality ../build_$(BUILD_TYPE_DIR)/image_change_quality_noop ../build_wasm$(BUILD_TYPE_DIR)/image_change_quality_wasm2c
+build: test_bytes.h ../build_$(BUILD_TYPE_DIR)/image_change_quality ../build_$(BUILD_TYPE_DIR)/image_change_quality_rlbox_noop ../build_wasm$(BUILD_TYPE_DIR)/image_change_quality_wasm2c ../build_wasm$(BUILD_TYPE_DIR)/image_change_quality_rlbox_wasm2c
 
-test: build
+test:
 	../build_$(BUILD_TYPE_DIR)/image_change_quality
-	../build_$(BUILD_TYPE_DIR)/image_change_quality_noop
+	../build_$(BUILD_TYPE_DIR)/image_change_quality_rlbox_noop
 	../build_wasm$(BUILD_TYPE_DIR)/image_change_quality_wasm2c
+	../build_wasm$(BUILD_TYPE_DIR)/image_change_quality_rlbox_wasm2c
 
 clean:
 	rm -f test_bytes.h
