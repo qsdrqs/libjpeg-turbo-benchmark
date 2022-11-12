@@ -39,6 +39,10 @@ RLBOX_INCLUDES=-I $(MKFILE_DIR)/rlbox/code/include -I $(MKFILE_DIR)/rlbox_wasm2c
 RLBOX_LINK=-lrt
 WASM2C_BUILD_INCLUDES=-I $(WASM2C_SRC_PATH)/wasm2c -I$(REPO_PATH)/build_wasm$(BUILD_TYPE_DIR)/
 
+test_out.jpeg: test.jpeg
+	$(CC) -O0 -g generate_test_out.c -o ./generate_test_out $(LIBJPEG_INCLUDES) $(LIBJPEG_LINK)
+	./generate_test_out test.jpeg test_out.jpeg
+
 test_bytes.h: test.jpeg test_out.jpeg
 	echo "unsigned char inputData[] = {" > $@
 	hexdump -ve '1/1 "0x%.2x, "' test.jpeg >> $@
@@ -110,6 +114,7 @@ test:
 	../build_wasm$(BUILD_TYPE_DIR)/image_change_quality_rlbox_wasm2c
 
 clean:
+	rm -f test_out.jpeg
 	rm -f test_bytes.h
 	rm -rf ../build_*/
 	rm -rf ./wasm2c_sandbox_compiler/build_*
