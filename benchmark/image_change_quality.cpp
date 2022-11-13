@@ -9,11 +9,11 @@ using namespace std::chrono;
 
 #include "test_bytes.h"
 
-#define RELEASE_ASSERT(cond, msg) \
-  if(!(cond))                     \
-  {                               \
-    printf(msg "\n");             \
-    exit(1);                      \
+#define RELEASE_ASSERT(cond, msg)           \
+  if(!(cond))                               \
+  {                                         \
+    printf("FAILED: " #cond ". " msg "\n"); \
+    exit(1);                                \
   }
 
 void my_error_exit (j_common_ptr cinfo) {

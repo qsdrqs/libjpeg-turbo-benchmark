@@ -1,3 +1,5 @@
+NOTPARALLEL:
+
 .DEFAULT_GOAL := build
 
 SHELL := /bin/bash
@@ -39,7 +41,7 @@ RLBOX_INCLUDES=-I $(MKFILE_DIR)/rlbox/code/include -I $(MKFILE_DIR)/rlbox_wasm2c
 RLBOX_LINK=-lrt
 WASM2C_BUILD_INCLUDES=-I $(WASM2C_SRC_PATH)/wasm2c -I$(REPO_PATH)/build_wasm$(BUILD_TYPE_DIR)/
 
-test_out.jpeg: test.jpeg
+test_out.jpeg: test.jpeg ../build_$(BUILD_TYPE_DIR)
 	$(CC) -O0 -g generate_test_out.c -o ./generate_test_out $(LIBJPEG_INCLUDES) $(LIBJPEG_LINK)
 	./generate_test_out test.jpeg test_out.jpeg
 

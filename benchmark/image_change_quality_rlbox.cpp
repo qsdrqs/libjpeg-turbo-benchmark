@@ -193,11 +193,11 @@ RLBOX_DEFINE_BASE_TYPES_FOR(jpeg, noop)
 
 rlbox_load_structs_from_library(jpeg);
 
-#define RELEASE_ASSERT(cond, msg) \
-  if(!(cond))                     \
-  {                               \
-    printf(msg "\n");             \
-    exit(1);                      \
+#define RELEASE_ASSERT(cond, msg)           \
+  if(!(cond))                               \
+  {                                         \
+    printf("FAILED: " #cond ". " msg "\n"); \
+    exit(1);                                \
   }
 
 struct jpeg_parsed_data {
