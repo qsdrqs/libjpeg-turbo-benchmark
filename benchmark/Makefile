@@ -11,10 +11,10 @@ PARALLEL_COUNT=$(shell nproc)
 
 CC=clang
 CXX=clang++ -std=c++17
-WASI_CC=/opt/wasi-sdk/bin/clang --sysroot /opt/wasi-sdk/share/wasi-sysroot/
-WASI_CXX=/opt/wasi-sdk/bin/clang++ --sysroot /opt/wasi-sdk/share/wasi-sysroot/ -std=c++17
-WASI_AR=/opt/wasi-sdk/bin/ar
-WASI_LD=/opt/wasi-sdk/bin/wasm-ld
+WASI_CC=$$HOME/wasi-12/bin/clang --sysroot $$HOME/wasi-12/share/wasi-sysroot/
+WASI_CXX=$$HOME/wasi-12/bin/clang++ --sysroot $$HOME/wasi-12/share/wasi-sysroot/ -std=c++17
+WASI_AR=$$HOME/wasi-12/bin/ar
+WASI_LD=$$HOME/wasi-12/bin/wasm-ld
 WASI_CFLAGS=-I $(MKFILE_DIR)/wasmcompat
 WASI_LDFLAGS=-Wl,--export-all -Wl,--no-entry -Wl,--growable-table -Wl,--stack-first -Wl,-z,stack-size=1048576
 WASM2C_SRC_PATH=$(MKFILE_DIR)/wasm2c_sandbox_compiler
